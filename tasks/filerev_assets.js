@@ -8,105 +8,66 @@
 
 'use strict';
 
-var YAML = require('YAML');
+var YAML = require('yamljs');
 
-function normalizePath(path) {
-    // Swaps \ in path with /, to ensure consistent results for win/*nix
-    while (path.indexOf('\\') > 0) {
-        path = path.replace('\\', '/');
+var createNestedObject = function (base, names, value) {
+    // If a value is given, remove the last name and keep it for later:
+    var lastName = arguments.length === 3 ? names.pop() : false;
+
+    // Walk the hierarchy, creating new objects where needed.
+    // If the lastName was removed, then the last object is not set yet:
+    for (var i = 0; i < names.length; i++) {
+        base = base[names[i]] = base[names[i]] || {};
     }
-    return path;
-}
 
-function stripPrefixFromObj(obj, options) {
-  var assets = {};
-  options.cwd = normalizePath(options.cwd);
+    // If a value was given, set it to the last name:
+    if (lastName) base = base[lastName] = value;
 
-  for (var _key in obj) {
-    if (obj.hasOwnProperty(_key)) {
-      var key = _key,
-          value = obj[key];
-      if (options.cwd) {
-        if (key.substr(0, options.cwd.length) === options.cwd) {
-            key = _key.substr(options.cwd.length);
+    // Return the last object in the hierarchy:
+    return base;
+};
+
+module.exports = function (grunt) {
+
+    grunt.registerMultiTask('filerev_assets', 'Record asset paths from grunt-filerev to a json file', function () {
+        var self = this, spaces = 0,
+            options = self.options({
+                dest: 'assets.json',  // Writes to this file.
+                prettyPrint: false,
+                pathWrapper: null
+            });
+
+        // We must have run filerev in some manner first.
+        // If we do this: grunt.task.requires('filerev');
+        // then if we ran filerev:action we will fail out,
+        // when we don't want to. This just checks for the presence of the
+        // grunt.filerev object and fails if it's not present.
+        // You can override the warning with the --force command line option.
+        if (!grunt.filerev) {
+            grunt.fail.warn('Could not find grunt.filerev. Required task "filerev" must be run first.');
         }
-        if (obj[_key].substr(0, options.cwd.length) === options.cwd) {
-          value = obj[_key].substr(options.cwd.length);
+
+        if (!options.dest || !grunt.filerev.summary) {
+            grunt.log.error('No file saved.');
+            grunt.log.error(options.dest, grunt.filerev.summary);
+            return;
         }
-      }
-    assets[key] = value;
-    }
-  }
-  return assets;
-}
 
-function addPrefixToObj(obj, options) {
-  var assets = {};
-  options.prefix = normalizePath(options.prefix);
+        if (options.pathWrapper) {
+            var objectWrapper = {};
+            createNestedObject(objectWrapper, options.pathWrapper.split('.'), grunt.filerev.summary);
+            grunt.filerev.summary = objectWrapper;
+        }
 
-  for (var _key in obj) {
-    if (obj.hasOwnProperty(_key)) {
-      var key = _key,
-          value = obj[key];
-      if (options.prefix) {
-        value = options.prefix + value;
-      }
-    assets[key] = value;
-    }
-  }
-  return assets;
-}
+        if (options.dest.match(/\.yml$/)) {
+            grunt.file.write(options.dest, YAML.stringify(grunt.filerev.summary, 4));
+        } else {
+            grunt.file.write(options.dest, JSON.stringify(grunt.filerev.summary, 4, 2));
+        }
 
-module.exports = function(grunt) {
+        grunt.filerevassets = grunt.filerev.summary;
 
-  grunt.registerMultiTask('filerev_assets', 'Record asset paths from grunt-filerev to a json file', function() {
-      var self = this, spaces = 0,
-        options = self.options({
-          dest: 'assets.json',  // Writes to this file.
-          cwd: '',  // Removes cwd from the paths recorded.
-          prefix: '',  // Prepends this value to all asset paths.
-          prettyPrint: false
-        });
-
-      // We must have run filerev in some manner first.
-      // If we do this: grunt.task.requires('filerev');
-      // then if we ran filerev:action we will fail out,
-      // when we don't want to. This just checks for the presence of the
-      // grunt.filerev object and fails if it's not present.
-      // You can override the warning with the --force command line option.
-      if (!grunt.filerev) {
-        grunt.fail.warn('Could not find grunt.filerev. Required task "filerev" must be run first.');
-      }
-
-      if (!options.dest || !grunt.filerev.summary) {
-        grunt.log.error('No file saved.');
-        grunt.log.error(options.dest, grunt.filerev.summary);
-        return;
-      }
-
-      var assets = {};
-      Object.keys(grunt.filerev.summary).forEach(function (key) {
-        assets[normalizePath(key)] = normalizePath(grunt.filerev.summary[key]);
-      });
-      if (options.cwd) {
-        assets = stripPrefixFromObj(assets, options);
-      }
-      if (options.prefix) {
-        assets = addPrefixToObj(assets, options);
-      }
-      if (options.prettyPrint) {
-        spaces = 4;
-      }
-
-      if (options.dest.match(/\.yml$/)) {
-        grunt.file.write(options.dest, YAML.stringify(assets, 4, 2));
-      } else {
-        grunt.file.write(options.dest, JSON.stringify(assets, null, spaces));
-      }
-
-      grunt.filerevassets = assets;
-
-      grunt.log.writeln('File', options.dest, 'created.');
-  });
+        grunt.log.writeln('File', options.dest, 'created.');
+    });
 
 };
