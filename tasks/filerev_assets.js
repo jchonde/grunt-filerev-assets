@@ -8,6 +8,8 @@
 
 'use strict';
 
+var YAML = require('YAML');
+
 function normalizePath(path) {
     // Swaps \ in path with /, to ensure consistent results for win/*nix
     while (path.indexOf('\\') > 0) {
@@ -19,7 +21,7 @@ function normalizePath(path) {
 function stripPrefixFromObj(obj, options) {
   var assets = {};
   options.cwd = normalizePath(options.cwd);
-  
+
   for (var _key in obj) {
     if (obj.hasOwnProperty(_key)) {
       var key = _key,
@@ -41,7 +43,7 @@ function stripPrefixFromObj(obj, options) {
 function addPrefixToObj(obj, options) {
   var assets = {};
   options.prefix = normalizePath(options.prefix);
-  
+
   for (var _key in obj) {
     if (obj.hasOwnProperty(_key)) {
       var key = _key,
@@ -96,8 +98,11 @@ module.exports = function(grunt) {
         spaces = 4;
       }
 
-      grunt.file.write(options.dest,
-                       JSON.stringify(assets, null, spaces));
+      if (options.dest.match(/\.yml$/)) {
+        grunt.file.write(options.dest, YAML.stringify(assets, 4, 2));
+      } else {
+        grunt.file.write(options.dest, JSON.stringify(assets, null, spaces));
+      }
 
       grunt.filerevassets = assets;
 
