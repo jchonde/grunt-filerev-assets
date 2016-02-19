@@ -34,7 +34,8 @@ module.exports = function (grunt) {
             options = self.options({
                 dest: 'assets.json',  // Writes to this file.
                 prettyPrint: false,
-                pathWrapper: null
+                pathWrapper: null,
+                cwd: ''
             });
 
         // We must have run filerev in some manner first.
@@ -53,19 +54,30 @@ module.exports = function (grunt) {
             return;
         }
 
+        var assets = grunt.filerev.summary;
+
+        if (options.cwd) {
+            Object.keys(assets).forEach(function(key) {
+                var newkey = key.replace(options.cwd, '');
+                var newvalue = assets[key].replace(options.cwd, '');
+                assets[newkey] = newvalue;
+                delete assets[key];
+            });
+        }
+
         if (options.pathWrapper) {
             var objectWrapper = {};
-            createNestedObject(objectWrapper, options.pathWrapper.split('.'), grunt.filerev.summary);
-            grunt.filerev.summary = objectWrapper;
+            createNestedObject(objectWrapper, options.pathWrapper.split('.'), assets);
+            assets = objectWrapper;
         }
 
         if (options.dest.match(/\.yml$/)) {
-            grunt.file.write(options.dest, YAML.stringify(grunt.filerev.summary, 4));
+            grunt.file.write(options.dest, YAML.stringify(assets, 4));
         } else {
-            grunt.file.write(options.dest, JSON.stringify(grunt.filerev.summary, 4, 2));
+            grunt.file.write(options.dest, JSON.stringify(assets, 4, 2));
         }
 
-        grunt.filerevassets = grunt.filerev.summary;
+        grunt.filerevassets = assets;
 
         grunt.log.writeln('File', options.dest, 'created.');
     });
